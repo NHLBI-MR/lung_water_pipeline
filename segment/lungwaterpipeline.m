@@ -1,42 +1,46 @@
 function lungwaterpipeline(no)
+%Plugin for Segment to run lung water pipeline developed by Felicia Seemann, 2022
+%felicia.seemann@nih.gov
+
+%no is the set number for the image intended for lung water analysis
+
 global SET DATA NO
 
+localPath='C:\Users\username\lung_water_pipeline\python'; %enter the local path to your neural network location
 
-% lung_segmentation(no);
+lung_segmentation(no, localPath);
 liver_roi(no);
-% coil_shading_correction(no);
+coil_shading_correction(no);
 calc_lwd(no);
 
 %display results
 d=sprintf('Lung water density: %0.1f %%', SET(no).Developer.LWD);
-lungwater.LWD_overlay_maps(squeeze(SET(no).Developer.LWD_map),squeeze(SET(no).Developer.LungMaskML),squeeze(SET(no).IM),d,10, 0, 40);
-
-
+LWD_overlay_maps(squeeze(SET(no).Developer.LWD_map),squeeze(SET(no).Developer.LungMaskML),squeeze(SET(no).IM),d,10, 0, 40);
 end
 
 
-function mask = lung_segmentation(no)
+function mask = lung_segmentation(no, localPath)
 %this function calls a lung segmentation neural network in python through
 %an external system command
 
 global SET
 
 %define paths
-windowsPath='\\hl-share.nhlbi.nih.gov\tmb\lab-campbell\_code_\python\dl_lung_segmentation\implementation\';
-kauaiPath = '/mnt/lab-campbell/_code_/python/dl_lung_segmentation/implementation/';
-script=[kauaiPath, 'compute_lung_seg.py'];
-input=[kauaiPath, 'image_ML.mat'];
-output=[kauaiPath, 'mask_ML.mat'];
-command = sprintf('plink -ssh seemannfh@kauai -batch python3 %s %s %s', script,input,output);
+
+
+script=[localPath, 'compute_lung_seg.py'];
+input=[localPath, 'image_ML.mat'];
+output=[localPath, 'mask_ML.mat'];
+command = sprintf('python3 %s %s %s', script,input,output);
 
 
 image = squeeze(calcfunctions('calctruedata',SET(no).IM, no));
 %downsample
-im=imresize(image, round(SET(no).ResolutionX/1.25), 'bicubic');
+im=imresize(image, round(SET(no).ResolutionX/1.5), 'bicubic');
 
 %save image as .mat
 disp('Saving image to server');
-save([windowsPath, 'image_ML.mat'], 'im');
+save([localPath, 'image_ML.mat'], 'im');
 
 %run model in python
 disp('Running neural network');
@@ -47,10 +51,10 @@ pause(5);
 
 %load generated mask
 disp('Loading mask from server');
-load([windowsPath, 'mask_ML.mat']);
+load([localPath, 'mask_ML.mat']);
 
 %downsample
-mask=imresize(mask, 1/round(SET(no).ResolutionX/1.25), 'bicubic');
+mask=imresize(mask, 1/round(SET(no).ResolutionX/1.5), 'bicubic');
 mask(mask>=0.3)=1;
 mask(mask<0.3)=0;
 
@@ -59,7 +63,6 @@ SET(no).Developer.LungMaskML=[];
 SET(no).Developer.LungMaskML(:,:,1,:)=mask;
 
 %store in segment
-% make_mask_overlay(image,mask);
 lungmask2roi(no);
 maskHoles2Roi(no);
 makeLungMaskFromRoi(no,'Lung');
@@ -123,9 +126,6 @@ Y=midCol;
 x = repmat(rx*sin(omega)+X,[1 1 1]); x = [x ; x(1,:)];
 y = repmat(ry*cos(omega)+Y,[1 1 1]); y = [y ; y(1,:)];
 liverMask(:,:,midSlice) = poly2mask(y,x,size(mask,1),size(mask,2));
-% catch
-%     liverMask(10:10,10:10,1) = 1;
-% end
 
 %delete any current liver ROI
 roi('roitemplatedelete_Callback','Liver');
@@ -161,45 +161,43 @@ function coil_shading_correction(no)
 %this normalizes the images by fitting them to a 3rd order polynomial
 
 global SET
-image = squeeze(calcfunctions('calctruedata',SET(no).IM, no));
+image = squeeze(SET(no).IM); %scaled 0-1
 lungMask=squeeze(SET(no).Developer.LungMaskML);
 liverMask=squeeze(SET(no).Developer.LiverMask);
-
-%crop images around masks for stability
-rows=find(sum(sum(lungMask+liverMask,3),2));
-cols=find(sum(sum(lungMask+liverMask,3),1));
-firstRow=rows(1)-3;  lastRow=rows(end)+10;
-firstCol=cols(1)-10;  lastCol=cols(end)+10;
-
-im = image(firstRow:lastRow,firstCol:lastCol,:);
-lungMask=lungMask(firstRow:lastRow,firstCol:lastCol,:);
-
+liverMaskSlice=find(sum(sum(liverMask,1),2)~=0);
+ 
 %find mask of body, removing the lungs
-object_mask = im > mean(im(:)) - 1*std(im(:));
-object_mask = object_mask - lungMask;
-object_mask(object_mask<0) = 0;
-object_mask(object_mask>0) = 1;
+bodymask=zeros(size(image));
+bodymask(image>=mean(image(:)))=1;
+bodymask(lungMask==1)=0; %exclude lungs
 
-[coilmap, B]=polynomial_fit(im, object_mask); %3rd order polynomial fit over 3d volume
+lambda = findLambdaSmoothing(image(:,:,liverMaskSlice));
+
+coilmap=[];
+for loop=1:size(image,3) %slice-by-slice Tikhonov regularization
+    coilmap(:,:,loop) = tikReg2D(image(:,:,loop).*bodymask(:,:,loop),lambda);
+end
 
 %normalize image
-psn_im = im./coilmap;
+ image_norm=image./coilmap;
 
-image_norm=zeros(size(image));
-image_norm(firstRow:lastRow,firstCol:lastCol,:) = psn_im;
+ image_norm(find(isinf(image_norm)))=0;
+ image_norm(find(isnan(image_norm)))=0;
+
 SET(no).Developer.ImageNorm(:,:,1,:)=image_norm;
 SET(no).Developer.Coilmap(:,:,1,:)=coilmap;
-SET(no).Developer.NormCoeffs=B;
+SET(no).Developer.Lambda=lambda;
+
 
 
 figure(4); clf;
-ax(1)=subplot(2,3,1);  montage(image, 'DisplayRange', [0,max(im(:))]); title('No PSN')
-ax(2)=subplot(2,3,2);  montage(image_norm, 'DisplayRange', [0,max(im(:))]); title('With PSN')
-ax(3)=subplot(2,3,3);  montage(coilmap, 'DisplayRange', [0,max(coilmap(:))]);  title('Polynomial fit')
+ax(1)=subplot(2,3,1);  montage(image, 'DisplayRange', [0,max(image(:))]); title('No normalization')
+ax(2)=subplot(2,3,2);  montage(image_norm, 'DisplayRange', [0,max(image(:))]); title('With normalization')
+ax(3)=subplot(2,3,3);  montage(coilmap, 'DisplayRange', [0,max(coilmap(:))]);  title('Coil map')
 
-ax(4)=subplot(2,3,4);  montage(permute(image,[1 3 2]), 'DisplayRange', [0,max(im(:))]); title('No PSN')
-ax(5)=subplot(2,3,5);  montage(permute(image_norm,[1 3 2]), 'DisplayRange', [0,max(im(:))]); title('With PSN')
-ax(6)=subplot(2,3,6);  montage(permute(coilmap,[1 3 2]), 'DisplayRange', [0,max(coilmap(:))]);  title('Polynomial fit')
+ax(4)=subplot(2,3,4);  montage(permute(image,[1 3 2]), 'DisplayRange', [0,max(image(:))]); title('No normalization')
+ax(5)=subplot(2,3,5);  montage(permute(image_norm,[1 3 2]), 'DisplayRange', [0,max(image(:))]); title('With normalization')
+ax(6)=subplot(2,3,6);  montage(permute(coilmap,[1 3 2]), 'DisplayRange', [0,max(coilmap(:))]);  title('Coil map')
 
 colormap(ax(1), 'gray');
 colormap(ax(2),'gray');
@@ -219,16 +217,13 @@ function calc_lwd(no)
 global SET
 try
     SET(no).Developer.ImageNorm;
-catch
-    SET(no).Developer.ImageNorm =calcfunctions('calctruedata',SET(no).IM, no);
+catch %if normalized image no found, pull original image
+    SET(no).Developer.ImageNorm = calcfunctions('calctruedata',SET(no).IM, no); 
 end
-
-
 
 im=squeeze(SET(no).Developer.ImageNorm);
 makeLungMaskFromRoi(no,'Lung');
-% lungMask=squeeze(SET(no).Developer.LungMaskML);
-lungMask=squeeze(SET(no).Developer.LungMask);
+lungMask=squeeze(SET(no).Developer.LungMaskML);
 liverMask=squeeze(SET(no).Developer.LiverMask);
 
 LWD_map = 70*im./mean(im(liverMask==1)); %assuming hepatic water density is 70%
@@ -244,56 +239,10 @@ end
 %SUPPORTING FUNCTIONS FOR SEGMENT
 %---------------------------------------------------------------------
 
-function [coilmap, B]=polynomial_fit(im, object_mask)
-
-[Yp, Xp, Zp] = meshgrid(1:size(im,2), 1:size(im,1), 1:size(im,3));
-masked_inds=find(object_mask);
-x=Xp(masked_inds); y=Yp(masked_inds); z=Zp(masked_inds);
-C=[x.^3, y.^3, z.^3, x.^2.*y, x.^2.*z, y.^2.*x, y.^2.*z, z.^2.*x, z.^2.*y, x.*y.*z, x.^2, y.^2, z.^2, x.*y, y.*z, x.*z, x, y, z, ones(size(x))];
-
-si=double(im(masked_inds));
-
-pn_factor       = 500; % normalised
-search_range    = 10;
-fit_minimum     = [repmat(-search_range, [1 19]) -1]*pn_factor;
-fit_maximum     = [repmat(search_range, [1 19]) 1]*pn_factor;
-
-opts=  optimset('Display','none');
-
-B=lsqlin(C,si, [], [], [], [], fit_minimum, fit_maximum,[],opts)';
-
-%polynomial in 3D coordinates
-surfit_s = @(B,XYZ) B(1)*XYZ(:,:,:,1).^3 + B(2)*XYZ(:,:,:,2).^3 + B(3)*XYZ(:,:,:,3).^3 +                                        ... [3rd order] terms
-    B(4)*XYZ(:,:,:,1).^2.*XYZ(:,:,:,2) + B(5)*XYZ(:,:,:,1).^2.*XYZ(:,:,:,3) +                                                   ... [3rd order] cross terms //x2
-    B(6)*XYZ(:,:,:,2).^2.*XYZ(:,:,:,1) + B(7)*XYZ(:,:,:,2).^2.*XYZ(:,:,:,3) +                                                   ... [3rd order] cross terms //y2
-    B(8)*XYZ(:,:,:,3).^2.*XYZ(:,:,:,1) + B(9)*XYZ(:,:,:,3).^2.*XYZ(:,:,:,2) + B(10)*XYZ(:,:,:,1).*XYZ(:,:,:,2).*XYZ(:,:,:,3) +  ... [3rd order] cross terms //z2
-    B(11)*XYZ(:,:,:,1).^2 + B(12)*XYZ(:,:,:,2).^2 + B(13)*XYZ(:,:,:,3).^2 +                                                     ... [2nd order] terms
-    B(14)*XYZ(:,:,:,1).*XYZ(:,:,:,2)  + B(15)*XYZ(:,:,:,2).*XYZ(:,:,:,3)  + B(16)*XYZ(:,:,:,1).*XYZ(:,:,:,3) +                  ... [2nd order] cross terms
-    B(17)*XYZ(:,:,:,1) + B(18)*XYZ(:,:,:,2) + B(19)*XYZ(:,:,:,3) + B(20);
-
-%3D coordinated for coil map
-psn_phys_coords = zeros([size(im), 3], 'single');
-psn_phys_coords(:,:,:,1) = Xp; psn_phys_coords(:,:,:,2) = Yp; psn_phys_coords(:,:,:,3) = Zp; %store meshgrid in 4D array
-
-coilmap = surfit_s(B, psn_phys_coords);
-
-
-cutoff_coilmap=prctile(coilmap(:),95); %cap at 95th percentile
-norm_coilmap = coilmap./cutoff_coilmap;
-lower_cutoff=0.1;
-norm_coilmap(norm_coilmap<lower_cutoff) = lower_cutoff; %lowe cap at 0.1 or maybe higher
-norm_coilmap(norm_coilmap>1)=1;
-coilmap=norm_coilmap;
-
-end
-
-
 function lungmask2roi(no)
 global SET DATA NO
 
 NO=no;
-% im=squeeze(SET(no).IM(:,:,1,:));
-
 mask=squeeze(SET(no).Developer.LungMaskML);
 
 DATA.Silent=true;
@@ -346,13 +295,10 @@ end
 function [x, y]=getObjectContours(mask)
 
 global DATA
-%finds the contours around the object (only) in mask
-% mask = bwareafilt(logical(mask_in), 1);
 
 [mi,mj] = ind2sub(size(mask),find(mask,1));
 
 X = bwtraceboundary(mask,[mi,mj],'W');
-%  x=[X(:,1),X(1,1)]'; y=[X(:,2),X(1,2)]'; %first point same as last
 
 windowWidth = 45;
 polynomialOrder = 12;
@@ -514,3 +460,116 @@ end
 end
 
 
+
+function lambda = findLambdaSmoothing(image, lambda_range)
+%this function is an adaptation of the function LCurveFind impelemned by
+% W. Quinn Meadus, June 2019, which is avaliable at 
+% https://github.com/meadus/TikhonovRegularizationSurfaceFit
+
+% LCurveFind() finds a smoothing parameter to balance a tikhonov regularization problem
+% based on the L-curve method as described in the 1992 paper. This function
+% was used to determine a proper smoothing value for the lung water image
+% set normalization. Effectively finds a balacance between error from
+% fitting to the original data and error from oversmoothing.
+%
+% [spf,ind,xL,yL] = LCurveFind(slice)
+% slice == slice to be normalized, zero values are excluded from the fit
+% spf == final smoothing parameter (lambda)
+% ind === index of array of possible smoothing parameters
+% xL, yL == x and y for the L-curve
+% plot(xL,yL,xL(ind),yL(ind),'*') to see what point of the curve was chosen
+
+if nargin < 2
+   lambda_range=linspace(0.5,2000); %lambda search range
+else
+    lambda_range=linspace(lambda_range(1),lambda_range(2)); %lambda search range
+end
+image=double(image);
+
+ind = image>0; %values less than zero will be excluded from the fitting process
+b = image(image>0); 
+
+
+for i = 1:length(lambda_range)
+    %Fitting the surface with a specific smoothing parameter
+    [x,A,T] = tikReg2D(image,lambda_range(i));
+
+    %calculating the errors with that parameter
+    res_norm(i) = norm(A*x(:)-b,'fro');
+    solution_norm(i) = norm(T*x(:),'fro');
+end
+
+res_norm_log = log(res_norm);
+solution_norm_log = log(solution_norm);
+
+x_grid = 0.5:0.25:50000;
+%interpolate norms
+res_norm_log= spline(lambda_range,res_norm_log,x_grid);
+solution_norm_log = spline(lambda_range,solution_norm_log,x_grid);
+
+%calculating maximum curvature, derivatives
+xL1 = gradient(res_norm_log);
+yL1 = gradient(solution_norm_log);
+
+xL2 = del2(res_norm_log);
+yL2 = del2(solution_norm_log);
+
+k = (xL2.*yL1-xL1.*yL2)./(xL1.^2+yL1.^2).^1.5; %curvature equations
+[~,ind] = min(k);
+lambda = x_grid(ind); %optimized lambda at max curvature
+
+end
+
+function [X,A,T] = tikReg2D(image,lambda)
+% This function was implemented by W. Quinn Meadus, June 2019, and is
+% avaliable at https://github.com/meadus/TikhonovRegularizationSurfaceFit
+% 
+% tikReg2D() generates a surface to fit to the data in "slice". Based on
+% John D'Errico's Gridfit. Zeros are ignored from the fit, tikhonov
+% regularization allows for fitting a surface over data with large holes or
+% missing data.
+%
+% slice == data to fit a surface over (will fit to non-zero data in the
+% array), 2D matrix
+% lambda == smoothing paramter, the higher the value, the smoother the fit
+
+
+image=double(image);
+[ny, nx, nz] = size(image);
+
+b = image(image(:)>0); %rhs data, assuming 0 values are to be excluded from the fit
+bind = find(image(:)); %rhs location in full grid
+
+nb = length(b);
+ngrid = length(image(:));
+
+%Holds the information for the location of each b value in the full grid
+%(bInd) while having a row corresponding to each b value.
+A = sparse((1:nb)',bind, ones(nb,1),nb,ngrid);
+
+
+%difference approximation in y
+[i,j] = meshgrid(1:nx,2:(ny-1));
+ind = j(:) + ny*(i(:)-1);
+len = length(ind);
+
+T2 = sparse(repmat(ind,1,3), [ind-1,ind,ind+1], [-1*ones(len,1),2*ones(len,1),-1*ones(len,1)], ngrid,ngrid);
+
+
+%difference approximation in x
+[i,j] = meshgrid(2:(nx-1),1:ny);
+ind = j(:) + ny*(i(:)-1);
+len = length(ind);
+
+T1 = sparse(repmat(ind,1,3), [ind-ny,ind,ind+ny], [-1*ones(len,1),2*ones(len,1),-1*ones(len,1)], ngrid,ngrid);
+
+%Combining regularization (tikhonov) matrices
+T = [T1;T2];
+
+%appending zeros to the rhs
+b = [b;zeros(size(T,1),1)];
+
+%solving the minimization problem (tikhonov regularization solution)
+AT = [A;lambda*T];
+X = reshape((AT'*AT)\(AT'*b),ny,nx);
+end

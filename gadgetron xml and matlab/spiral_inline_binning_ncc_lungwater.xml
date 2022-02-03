@@ -22,14 +22,6 @@
 
     <stream>
       
-    <!-- Noise prewhitening 
-        <gadget>
-            <dll>gadgetron_mricore</dll>
-            <classname>NoiseAdjustGadget</classname>
-
-        </gadget>-->
-
-
         <!-- Convert gradient waveforms into trajectories -->
         <gadget>
             <name>WaveformToTrajectory</name>
@@ -39,11 +31,6 @@
             <property><name>GIRF_folder</name><value>/opt/data/GIRF/</value></property>
         </gadget>
 
-       <!--  <external>
-           <connect address="kauai.nhlbi.nih.gov" port="18000"/>-->
-          <!-- <execute name="gadgetron.nhlbi.binning_data" type="matlab"/> -->
-           <!-- <configuration/>
-          </external> -->
         
        <gadget>
             <dll>nhlbi_gt_toolbox</dll>
@@ -71,11 +58,7 @@
             <property><name>skipPermute</name><value>true</value></property>            
         </gadget>
 
-      <!--  <gadget>
-            <name>SpiralConcomitantCorrectionGadget</name>
-            <dll>nhlbi_gt_toolbox</dll>
-            <classname>SpiralConcomitantCorrectionGadget</classname>
-        </gadget>-->
+
         <gadget>
             <name>WeightsEstimationGadget</name>
             <dll>nhlbi_gt_toolbox</dll>
@@ -96,7 +79,7 @@
             <property><name>kappa</name><value>0</value></property>
             <property><name>Debug</name><value>1</value></property>
             <property><name>doConcomitantFieldCorrection</name><value>true</value></property>
-            <property><name>NoSense</name><value>0</value></property><!-- We want to use sense but its not stable and has GPU memory beef -->
+            <property><name>NoSense</name><value>0</value></property>
         </gadget>
 
 
@@ -113,23 +96,8 @@
         </gadget>
         
         
-        <!--
-         <gadget>
-            <name>AutoScaleGadget</name>
-            <dll>gadgetron_mricore</dll>
-            <classname>AutoScaleGadget</classname>
-        </gadget> -->
-
-        <!-- <gadget>
-            <name>scalingGadget</name>
-            <dll>nhlbi_gt_toolbox</dll>
-            <classname>scalingGadget</classname>
-            <property><name>scaling</name><value>1</value></property>
-        </gadget> -->
-        
          <external>
-           <connect address="137.187.134.183" port="18000"/>
-          <!-- <execute name="gadgetron.nhlbi.binning_data" type="matlab"/> -->
+          <execute name="gadgetron.nhlbi.lung_water_pipeline" type="matlab"/> 
            <configuration/>
         </external>
        
