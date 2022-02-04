@@ -19,9 +19,9 @@ Repository with gadgetron image reconstruction code: https://github.com/NHLBI-MR
 # Reconstruction & Inline Lung Water Analysis
 - gadgetron configuration [file](https://github.com/NHLBI-MR/lung_water_pipeline/blob/main/gadgetron%20xml%20and%20matlab/spiral_inline_binning_ncc_lungwater.xml)
 
-# Offline analysis using Segment ([Medviso](https://medviso.com/segment/))
+# Offline analysis using Segment 
 Installation
 - https://github.com/Cardiac-MR-Group-Lund/segment-open
-
+- [Medviso](https://medviso.com/segment/)
 
 
