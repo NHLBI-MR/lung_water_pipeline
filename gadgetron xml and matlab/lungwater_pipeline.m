@@ -7,6 +7,7 @@ function lungwater_pipeline(connection)
 %Felicia Seemann 2022
 %felicia.seemann@nih.gov
 
+% !! USER ATTENTION !! Enter path to network!!
 pathname = '.../lung_water_pipeline/python'; %local path of the python lung segmentation network
 
 next_acquisition = @connection.next; %listens for images being streamed
