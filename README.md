@@ -1,4 +1,4 @@
-# lung_water_pipeline
+# Imaging gravity-induced lung water redistribution with automated inline processing at 0.55T MRI
 
 This code is for the manuscript (in sub): Seemann, F., et al. Imaging gravity-induced lung water redistribution with automated inline processing at 0.55T MRI
 
