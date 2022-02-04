@@ -22,6 +22,7 @@
 
     <stream>
       
+        <!-- NHLBI GADGETRON TOOLBOX -->
         <!-- Convert gradient waveforms into trajectories -->
         <gadget>
             <name>WaveformToTrajectory</name>
@@ -31,7 +32,7 @@
             <property><name>GIRF_folder</name><value>/opt/data/GIRF/</value></property>
         </gadget>
 
-        
+        <!-- NHLBI GADGETRON TOOLBOX -->
        <gadget>
             <dll>nhlbi_gt_toolbox</dll>
             <classname>GatingandBinningGadget</classname>
@@ -47,8 +48,7 @@
             <property><name>debug</name><value>true</value></property>
         </gadget>
 
-
-
+        <!-- NHLBI GADGETRON TOOLBOX -->
         <gadget>
             <name>SpiralAccumulateGated</name>
             <dll>nhlbi_gt_toolbox</dll>
@@ -58,7 +58,7 @@
             <property><name>skipPermute</name><value>true</value></property>            
         </gadget>
 
-
+        <!-- NHLBI GADGETRON TOOLBOX -->
         <gadget>
             <name>WeightsEstimationGadget</name>
             <dll>nhlbi_gt_toolbox</dll>
@@ -67,6 +67,7 @@
             <property><name>overSampling</name><value>5.5</value></property>
         </gadget>
         
+        <!-- NHLBI GADGETRON TOOLBOX -->
         <gadget>
             <name>SenseGriddingReconGadget3D_Parallel</name>
             <dll>nhlbi_gt_toolbox</dll>
@@ -82,7 +83,6 @@
             <property><name>NoSense</name><value>0</value></property>
         </gadget>
 
-
         <gadget>
             <name>ImageArraySplit</name>
             <dll>gadgetron_mricore</dll>
@@ -95,12 +95,13 @@
             <classname>ComplexToFloatGadget</classname>
         </gadget>
         
-        
+        <!-- GADGETRON-MATLAB > Send images for Lung Water analysis -->
          <external>
           <execute name="gadgetron.nhlbi.lung_water_pipeline" type="matlab"/> 
            <configuration/>
         </external>
        
+        <!-- NHLBI GADGETRON TOOLBOX -->
         <gadget>
             <name>scalingGadget</name>
             <dll>nhlbi_gt_toolbox</dll>
