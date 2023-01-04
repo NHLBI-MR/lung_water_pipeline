@@ -24,4 +24,12 @@ Installation
 - https://github.com/Cardiac-MR-Group-Lund/segment-open
 - [Medviso](https://medviso.com/segment/)
 
+# Requires python packages 
+- numpy
+- matplotlib
+- torch
+- torchvision
+- scipy
 
+pip install numpy matplotlib torch torchvision scipy
+the trained neural network is named best_lung_seg_model.pkl and is saved in the python folder 
