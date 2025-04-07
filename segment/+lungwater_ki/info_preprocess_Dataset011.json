@@ -1,0 +1,47 @@
+{
+    "batch_size": 22,
+    "foreground_intensity_properties_per_channel": {
+        "0": {
+            "max": 4239.111328125,
+            "mean": 165.13306951449934,
+            "median": 81.66255187988281,
+            "min": -201.1481475830078,
+            "percentile_00_5": 0.02153846062719822,
+            "percentile_99_5": 1836.818365478528,
+            "std": 278.8866510641438
+        }
+    },
+    "inference_allowed_mirroring_axes": [
+        0,
+        1
+    ],
+    "inference_gaussian": null,
+    "normalization_schemes": [
+        "ZScoreNormalization"
+    ],
+    "num_input_channels": 1,
+    "num_seg_heads": 2,
+    "patch_size": [
+        384,
+        384
+    ],
+    "target_spacing": [
+        1.5,
+        1.5
+    ],
+    "tile_step_size": 0.5,
+    "transpose_backward": [
+        0,
+        1,
+        2
+    ],
+    "transpose_forward": [
+        0,
+        1,
+        2
+    ],
+    "use_gaussian": true,
+    "use_mask_for_norm": [
+        false
+    ]
+}
